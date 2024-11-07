@@ -70,6 +70,8 @@ def Digest.asHex (digest : Digest) : String :=
 
 def Digest.toNatAsBytes (digest : Digest) : Nat := digest.reverse.foldl (fun acc elem => acc * (2 ^ 8) + elem) 0
 
+def Digest.toComm (digest : Digest) : Nat := digest.reverse.foldl (fun acc elem => acc * (2 ^ 32) + elem) 0
+
 def Digest.ofSmallNat (n : Nat) : Digest := Digest.zero.set! 0 <| .ofNat n
 
 def Digest.ofChar (c : Char) : Digest :=

@@ -247,7 +247,7 @@ declare_syntax_cat                                   expr
 scoped syntax atom_                                : expr
 scoped syntax ident                                : expr
 scoped syntax num                                  : expr
-scoped syntax "#c" noWs num                             : expr -- Commitments
+scoped syntax "#c" noWs str                        : expr -- Commitments
 scoped syntax char                                 : expr
 scoped syntax str                                  : expr
 scoped syntax "(" "current-env" ")"                : expr
@@ -275,6 +275,20 @@ scoped syntax "(" "LET"    "(" binder* ")" expr ")" : expr
 scoped syntax "(" "letrec" "(" binder* ")" expr ")" : expr
 scoped syntax "(" "LETREC" "(" binder* ")" expr ")" : expr
 
+private def hexStrToNat! (s : String) : Nat := Id.run do
+  let mut n := 0
+  let chars := s.data.drop 2
+  for c in chars do
+    if c.toNat >= '0'.toNat && c.toNat <= '9'.toNat then
+      n := n * 16 + c.toNat - '0'.toNat
+    else if c.toNat >= 'a'.toNat && c.toNat <= 'f'.toNat then
+      n := n * 16 + c.toNat - 'a'.toNat + 10
+    else if c.toNat >= 'A'.toNat && c.toNat <= 'F'.toNat then
+      n := n * 16 + c.toNat - 'A'.toNat + 10
+    else
+      panic! "invalid hex string"
+  n
+
 mutual
 
 partial def elabExpr : TSyntax `expr → TermElabM Lean.Expr
@@ -283,8 +297,10 @@ partial def elabExpr : TSyntax `expr → TermElabM Lean.Expr
   | `(expr| $n:num) => do
     let atom ← mkAppM ``Atom.num #[← mkAppM ``F.ofNat #[mkNatLit n.getNat]]
     mkAppM ``Expr.atom #[atom]
-  | `(expr | #c$n:num) => do
-    let atom ← mkAppM ``Atom.commit #[← mkAppM ``Digest.fromComm #[mkNatLit n.getNat]]
+  | `(expr | #c$n:str) => do
+    let n := n.getString
+    let n := hexStrToNat! n
+    let atom ← mkAppM ``Atom.commit #[← mkAppM ``Digest.fromComm #[mkNatLit n]]
     mkAppM ``Expr.atom #[atom]
   | `(expr| $c:char) => do
     let atom ← mkAppM ``Atom.char #[← mkAppM ``Char.ofNat #[mkNatLit c.getChar.val.toNat]]

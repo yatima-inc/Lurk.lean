@@ -1,12 +1,17 @@
 import YatimaStdLib.Nat
 import YatimaStdLib.ByteArray
 import YatimaStdLib.Zmod
+import LightData
 
 namespace Lurk
 
 def N := 2013265921
 
 abbrev F := Fin N
+
+instance : Encodable F LightData where
+  encode x := Encodable.encode x.val
+  decode x := .ofNat <$> Encodable.decode x
 
 def F.toZmod : F → Zmod N := fun x => x.val
 
@@ -97,5 +102,9 @@ def Digest.fromComm (n : Nat) : Digest :=
   let bytes := n.toByteArrayLE
   let digest := bytes.data.map fun b => F.ofNat b.toNat
   digest ++ Array.mkArray (8 - digest.size) .zero
+
+instance : Encodable Digest LightData where
+  encode x := Encodable.encode x.toList
+  decode x := List.toArray <$> (Encodable.decode x : Except String (List F))
 
 end Lurk

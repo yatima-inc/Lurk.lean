@@ -113,7 +113,7 @@ def elabOp₁ : TSyntax `op₁ → TermElabM Lean.Expr
   | `(op₁| U64)    | `(op₁| u64)    => mkSym "U64"
   | `(op₁| CHAR)   | `(op₁| char)   => mkSym "CHAR"
   | _ => throwUnsupportedSyntax
-  
+
 open Lurk.DSL in
 def elabOp₂ : TSyntax `op₂ → TermElabM Lean.Expr
   | `(op₂| CONS)    | `(op₂| cons)    => mkSym "CONS"
@@ -153,7 +153,7 @@ partial def elabSym : TSyntax `sym → TermElabM Lean.Expr
   | `(sym| eval)        | `(sym| EVAL)        => mkSym "EVAL"
   | `(sym| | $i:ident |) => mkSym i.getId.toString
   | `(sym| | current-env |)  => mkSym "current-env"
-  | `(sym| | if |)  => mkSym "if"  
+  | `(sym| | if |)  => mkSym "if"
   | `(sym| | let |) => mkSym "let"
   | `(sym| $i:ident.$n:num)
   | `(sym| | $i:ident.$n:num |) => do
@@ -247,6 +247,7 @@ declare_syntax_cat                                   expr
 scoped syntax atom_                                : expr
 scoped syntax ident                                : expr
 scoped syntax num                                  : expr
+scoped syntax "#c" noWs num                        : expr -- Commitments
 scoped syntax char                                 : expr
 scoped syntax str                                  : expr
 scoped syntax "(" "current-env" ")"                : expr
@@ -281,6 +282,9 @@ partial def elabExpr : TSyntax `expr → TermElabM Lean.Expr
   | `(expr| $s:ident) => do mkAppM ``Expr.sym #[mkStrLit s.getId.toString]
   | `(expr| $n:num) => do
     let atom ← mkAppM ``Atom.num #[← mkAppM ``F.ofNat #[mkNatLit n.getNat]]
+    mkAppM ``Expr.atom #[atom]
+  | `(expr | #c$n:num) => do
+    let atom ← mkAppM ``Atom.commit #[← mkAppM ``Digest.fromComm #[mkNatLit n.getNat]]
     mkAppM ``Expr.atom #[atom]
   | `(expr| $c:char) => do
     let atom ← mkAppM ``Atom.char #[← mkAppM ``Char.ofNat #[mkNatLit c.getChar.val.toNat]]

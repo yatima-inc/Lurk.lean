@@ -3,14 +3,15 @@ open Lake DSL
 
 package Lurk
 
-lean_lib Lurk
 
 @[default_target]
+lean_lib Lurk
+
 lean_exe lurk where
   root := `Main
 
 require Poseidon from git
-  "https://github.com/lurk-lab/Poseidon.lean" @ "4180a316a7822b924e05cda1729d8612fcc81ee7"
+  "https://github.com/lurk-lab/Poseidon.lean" @ "afe6069e38ae07cdffd7ae923c379aeb41009002"
 
 require YatimaStdLib from git
   "https://github.com/lurk-lab/YatimaStdLib.lean" @ "10f2b444390a41ede90ca5c038c6ff972014d433"

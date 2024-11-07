@@ -1,4 +1,3 @@
-import Lurk.Parser
 import Lurk.Eval
 import Lurk.LightData
 import Cli
@@ -39,7 +38,7 @@ def lurkCmd : Cli.Cmd := `[Cli|
   FLAGS:
     ls, "lightstore" : String; "Optional path to the data store"
     f, "frames" : Nat; "The number of frames dumped to a file in case of an error (defaults to 5)"
-  
+
   ARGS:
     source : String; "Lurk source file"
 ]

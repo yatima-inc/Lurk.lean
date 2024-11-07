@@ -28,19 +28,31 @@ def Tag.ofF : F → Option Tag
   | .ofNat 9 => return .u64
   | _ => none
 
+def Tag.toDigest : Tag → Digest
+  | .nil  => .ofSmallNat 0
+  | .cons => .ofSmallNat 1
+  | .sym  => .ofSmallNat 2
+  | .num  => .ofSmallNat 4
+  | .str  => .ofSmallNat 6
+  | .char => .ofSmallNat 7
+  | .comm => .ofSmallNat 8
+  | .u64  => .ofSmallNat 9
+
+def Tag.ofDigest : Digest → Option Tag := Tag.ofF ∘.ofNat ∘ Digest.toNatAsBytes
+
 structure ScalarPtr where
   tag : Tag
-  val : F
+  val : Digest
   deriving Ord, Repr
 
 @[inline] def ScalarPtr.isImmediate (ptr : ScalarPtr) : Bool :=
-  ptr matches ⟨.num, _⟩ | ⟨.u64, _⟩| ⟨.char, _⟩ | ⟨.str, F.zero⟩ | ⟨.sym, F.zero⟩
+  ptr matches ⟨.num, _⟩ | ⟨.u64, _⟩| ⟨.char, _⟩ | ⟨.str, Digest.zero⟩ | ⟨.sym, Digest.zero⟩
 
 inductive ScalarExpr
   | cons : ScalarPtr → ScalarPtr → ScalarExpr
   | strCons : ScalarPtr → ScalarPtr → ScalarExpr
   | symCons : ScalarPtr → ScalarPtr → ScalarExpr
-  | comm : F → ScalarPtr → ScalarExpr
+  | comm : Digest → ScalarPtr → ScalarExpr
   | nil
   deriving Repr
 
@@ -58,35 +70,36 @@ abbrev OpenM := ReaderT StoreCtx $ ExceptT String Id
 @[inline] def OpenM.withVisited (ptr : ScalarPtr) : OpenM α → OpenM α :=
   withReader fun ctx => { ctx with visited := ctx.visited.insert ptr }
 
+
 partial def loadLDON (ptr : ScalarPtr) : OpenM LDON := do
   if (← read).visited.contains ptr then throw s!"Cycle detected at {repr ptr}"
   else match ptr with
     | ⟨.nil, _⟩ => return .nil
     | ⟨.str, .zero⟩ => return .str ""
     | ⟨.sym, .zero⟩ => return .sym ""
-    | ⟨.char, f⟩ => return .char $ .ofNat f.val
-    | ⟨.num, f⟩ => return .num f
-    | ⟨.u64, f⟩ => return .u64 $ .ofNat f.val
+    | ⟨.char, f⟩ => return .char <| .ofNat <| f.toNatAsBytes
+    | ⟨.num, f⟩ => return .num f[0]!
+    | ⟨.u64, f⟩ => return .u64 $ .ofNat <| f.toNatAsBytes
     | _ => OpenM.withVisited ptr do match (← read).store.find? ptr with
       | none => throw s!"Expression for {repr ptr} not found"
       | some none => throw "Can't open opaque data"
       | some $ some expr => match expr with
         | .cons x y => return .cons (← loadLDON x) (← loadLDON y)
         | .strCons x y => match x, ← loadLDON y with
-          | ⟨.char, c⟩, .str cs => return .str ⟨.ofNat c :: cs.data⟩
+          | ⟨.char, c⟩, .str cs => return .str ⟨.ofNat c.toNatAsBytes :: cs.data⟩
           | _, _ => throw s!"Malformed expression for a string: {repr expr}"
         | .symCons x _ => match ← loadLDON x with
           | .str x => return .sym x
           | _ => throw s!"Malformed expression for a symbol: {repr expr}"
         | _ => unreachable!
 
-def openCommM (comm : F) : OpenM LDON := do
+def openCommM (comm : Digest) : OpenM LDON := do
   match (← read).store.find? ⟨.comm, comm⟩ with
   | none => throw s!"Commitment for {comm.asHex} not found"
   | some $ some (.comm _ ptr) => loadLDON ptr
   | _ => throw "Invalid commitment expression. Malformed store"
 
-def Store.open (store : Store) (comm : F) : Except String LDON :=
+def Store.open (store : Store) (comm : Digest) : Except String LDON :=
   ReaderT.run (openCommM comm) ⟨store, default⟩
 
 structure LDONHashState where
@@ -95,11 +108,9 @@ structure LDONHashState where
   ldonCache  : RBMap LDON        ScalarPtr compare
   deriving Inhabited
 
-def hashPtrPair (x y : ScalarPtr) : F :=
-  .ofNat $ (Poseidon.Lurk.hash4 x.tag.toF x.val y.tag.toF y.val).norm
+def hashPtrPair (x y : ScalarPtr) : Digest := .ofZmodArray<| Poseidon2.Lurk.hash32 <| x.tag.toDigest ++ x.val ++ y.tag.toDigest ++ y.val
 
-def hashFPtr (f : F) (x : ScalarPtr) : F :=
-  .ofNat $ (Poseidon.Lurk.hash3 f x.tag.toF x.val).norm
+def hashFPtr (f : Digest) (x : ScalarPtr) : Digest := .ofZmodArray <| Poseidon2.Lurk.hash24 <| f ++ x.tag.toDigest ++ x.val
 
 abbrev HashM := StateM LDONHashState
 
@@ -113,16 +124,16 @@ def hashChars (cs : List Char) : HashM ScalarPtr := do
   | some ptr => pure ptr
   | none =>
     let ptr ← match cs with
-      | [] => pure ⟨.str, F.zero⟩
+      | [] => pure ⟨.str, .zero⟩
       | c :: cs =>
-        let headPtr := ⟨.char, .ofNat c.toNat⟩
+        let headPtr := ⟨.char, Digest.ofSmallNat c.toNat⟩
         let tailPtr ← hashChars cs
         addExprHash ⟨.str, hashPtrPair headPtr tailPtr⟩ (.strCons headPtr tailPtr)
     modifyGet fun stt =>
       (ptr, { stt with charsCache := stt.charsCache.insert cs ptr })
 
 def hashStrings (ss : List String) : HashM ScalarPtr :=
-  ss.foldrM (init := ⟨.sym, F.zero⟩) fun s acc => do
+  ss.foldrM (init := ⟨.sym, .zero⟩) fun s acc => do
     let strPtr ← hashChars s.data
     addExprHash ⟨.sym, hashPtrPair strPtr acc⟩ (.symCons strPtr acc)
 
@@ -131,12 +142,13 @@ def hashLDON (x : LDON) : HashM ScalarPtr := do
   | some ptr => pure ptr
   | none =>
     let ptr ← match x with
-      | .nil => addExprHash ⟨.nil, (← hashStrings ["NIL", "LURK"]).val⟩ .nil
-      | .num n => pure ⟨.num, n⟩
-      | .u64 n => pure ⟨.u64, .ofNat n.val⟩
-      | .char n => pure ⟨.char, .ofNat n.toNat⟩
+      | .nil => addExprHash ⟨.nil, (← hashStrings ["nil", "lurk"]).val⟩ .nil
+      | .num n => pure ⟨.num, .ofSmallNat n.val⟩
+      | .comm d => pure ⟨.comm, d⟩
+      | .u64 n => pure ⟨.u64, .ofUInt64 n⟩
+      | .char n => pure ⟨.char, .ofChar n⟩
       | .str s => hashChars s.data
-      | .sym s => hashStrings [s, "LURK"]
+      | .sym s => hashStrings [s, "lurk"]
       | .cons car cdr =>
         let car ← hashLDON car
         let cdr ← hashLDON cdr
@@ -144,7 +156,7 @@ def hashLDON (x : LDON) : HashM ScalarPtr := do
     modifyGet fun stt =>
       (ptr, { stt with ldonCache := stt.ldonCache.insert x ptr })
 
-def hideLDON (secret : F) (x : LDON) : HashM F := do
+def hideLDON (secret : Digest) (x : LDON) : HashM Digest := do
   let ptr ← hashLDON x
   let hash := hashFPtr secret ptr
   discard $ addExprHash ⟨.comm, hash⟩ (.comm secret ptr)
@@ -170,10 +182,10 @@ partial def loadExprs (ptr : ScalarPtr) : ExtractM Unit := do
       | .comm _ x => loadExprs x
       | .nil => loadExprs ⟨.sym, ptr.val⟩
 
-def loadComms (comms : Array F) : ExtractM Unit :=
+def loadComms (comms : Array Digest) : ExtractM Unit :=
   comms.forM (loadExprs ⟨.comm, ·⟩)
 
-def LDONHashState.extractComms (stt : LDONHashState) (comms : Array F) :
+def LDONHashState.extractComms (stt : LDONHashState) (comms : Array Digest) :
     Except String Store :=
   match StateT.run (ReaderT.run (loadComms comms) ⟨stt.store, default⟩) default with
   | (.ok _, store) => return store
@@ -183,11 +195,11 @@ end Scalar
 
 open Scalar
 
-@[inline] def LDON.hide (ldon : LDON) (secret : F) (stt : LDONHashState) :
-    F × LDONHashState :=
+@[inline] def LDON.hide (ldon : LDON) (secret : Digest) (stt : LDONHashState) :
+    Digest × LDONHashState :=
   StateT.run (hideLDON secret ldon) stt
 
-@[inline] def LDON.commit (ldon : LDON) (stt : LDONHashState) : F × LDONHashState :=
-  StateT.run (hideLDON (.ofNat 0) ldon) stt
+@[inline] def LDON.commit (ldon : LDON) (stt : LDONHashState) : Digest × LDONHashState :=
+  StateT.run (hideLDON (.zero) ldon) stt
 
 end Lurk

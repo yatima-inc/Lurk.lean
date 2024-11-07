@@ -17,7 +17,7 @@ mutual
 inductive EnvImg
   | mk : Bool → Value → EnvImg
 
-inductive Env 
+inductive Env
   | mk : Lean.RBNode String (fun _ => EnvImg) → Env
 
 -- Does it make sense to extend LDON and use it here instead?
@@ -27,7 +27,7 @@ inductive Value where
   | char : Char   → Value
   | str  : String → Value
   | sym  : String → Value
-  | comm  : F → Value
+  | comm  : Digest → Value
   | «fun» : String → Env → Expr → Value
   | cons : Value  → Value → Value
   deriving Inhabited
@@ -58,8 +58,8 @@ end EnvImg
 
 namespace Value
 
-@[match_pattern] def t   := Value.sym "T"
-@[match_pattern] def nil := Value.sym "NIL"
+@[match_pattern] def t   := Value.sym "t"
+@[match_pattern] def nil := Value.sym "nil"
 
 section ValueDSL
 /- The following metaprogramming layer is merely for testing -/
@@ -99,6 +99,7 @@ partial def telescopeCons (acc : Array Value := #[]) : Value → Array Value × 
 
 def ofLDON : LDON → Value
   | .num  x => .num  x
+  | .comm x => .comm x
   | .u64  x => .u64  x
   | .char x => .char x
   | .str  x => .str  x
@@ -109,6 +110,7 @@ def ofAtom : Atom → Value
   | .t      => .t
   | .nil    => .nil
   | .num  x => .num  x
+  | .commit x => .comm x
   | .u64  x => .u64  x
   | .char x => .char x
   | .str  x => .str  x
@@ -155,8 +157,8 @@ end Env
 
 partial def Value.toString : Value → String
   | .num x => x.asHex
-  | .nil => "NIL"
-  | .t   => "T"
+  | .nil => "nil"
+  | .t   => "t"
   | .sym x => s!"|{x}|"
   | .u64 x => s!"{x}u64"
   | .char c => s!"#\\{c}"
@@ -164,7 +166,7 @@ partial def Value.toString : Value → String
   | v@(.cons ..) =>
     if v.depthLE 20 then
       match v.telescopeCons with
-      | (#[], .nil) => "NIL"
+      | (#[], .nil) => "nil"
       | (vs, v) =>
         let vs := " ".intercalate $ vs.data.map toString
         match v with
@@ -305,7 +307,7 @@ def numGe (e : Expr) : Value → Value → EvalM Value
   | .u64 x, .num y => return F.ge (.ofNat x.toNat) y
   | v₁, v₂ => error e s!"expected numeric values, got\n  {v₁} and {v₂}"
 
-def hideLDON (secret : F) (ldon : LDON) : EvalM Value := do
+def hideLDON (secret : Digest) (ldon : LDON) : EvalM Value := do
   let (comm, hashState) := ldon.hide secret (← get).hashState
   modifyGet fun stt => (.comm comm, stt.withHashState hashState)
 
@@ -322,19 +324,22 @@ def Expr.evalOp₁ (e : Expr) : Op₁ → Value → EvalM Value
   | .cdr, .str ⟨_::cs⟩ => return .str ⟨cs⟩
   | .cdr, v => error e s!"expected cons value, got\n  {v}"
   | .emit, v => dbg_trace v; return v
-  | .commit, v => hideLDON (.ofNat 0) v.toLDON
-  | .comm, .num n => return .comm n
+  | .commit, v => hideLDON .zero v.toLDON
+  | .comm, .num n => return .comm <| Digest.ofSmallNat n.val
   | .comm, v => error e s!"expected a num, got\n  {v}"
-  | .open, .num f
-  | .open, .comm f =>  do
-    match (← get).hashState.store.open f with
+  | .open, .num f => do
+    match (← get).hashState.store.open (.ofSmallNat f.val) with
+    | .error err => error e err
+    | .ok ldon => return .ofLDON ldon
+  | .open, .comm d =>  do
+    match (← get).hashState.store.open d with
     | .error err => error e err
     | .ok ldon => return .ofLDON ldon
   | .open, v => error e s!"expected a num or comm, got\n  {v}"
   | .num, x@(.num _) => return x
   | .num, .u64 n => return .num (.ofNat n.toNat)
   | .num, .char c => return .num (.ofNat c.toNat)
-  | .num, .comm c => return .num c
+  | .num, .comm c => return .num <| .ofNat c.toNatAsBytes
   | .num, v => error e s!"expected char, num, u64, or comm value, got\n  {v}"
   | .u64, x@(.u64 _) => return x
   | .u64, .num n => return .u64 (.ofNat n.val)
@@ -361,7 +366,7 @@ def Expr.evalOp₂ (e : Expr) : Op₂ → Value → Value → EvalM Value
   | .le, v₁, v₂ => numLe e v₁ v₂
   | .ge, v₁, v₂ => numGe e v₁ v₂
   | .eq, v₁, v₂ => return v₁.beq v₂
-  | .hide, .num f, v => hideLDON f v.toLDON
+  | .hide, .num f, v => hideLDON (.ofSmallNat f.val) v.toLDON
   | .hide, v, _ => error e s!"expected a num, got {v}"
 
 
@@ -382,21 +387,21 @@ mutual
 partial def Expr.evalApp₀ (fn : Expr) (env : Env) : EvalM Value := do
   match fn with
   | .sym n =>
-    let some ⟨r, v⟩ := env.find? n 
+    let some ⟨r, v⟩ := env.find? n
       | error fn s!"{n} not found"
-    let .fun "_" fnEnv body := v 
+    let .fun "_" fnEnv body := v
       | error fn s!"error evaluating\n{fn}\ninvalid 0-arity app"
     let fnEnv := if !r then fnEnv else fnEnv.insert n ⟨r, v⟩
     body.evalM fnEnv
   | fn =>
-    let .fun "_" fnEnv body ← fn.evalM env 
+    let .fun "_" fnEnv body ← fn.evalM env
       | error fn s!"error evaluating\n{fn}\ninvalid 0-arity app"
     body.evalM fnEnv
 
 partial def Expr.evalApp (fn : Expr) (arg : Expr) (env : Env) : EvalM Value := do
   match fn with
   | .sym n =>
-    let some ⟨r, v⟩ := env.find? n 
+    let some ⟨r, v⟩ := env.find? n
       | error fn s!"{n} not found"
     match v with
     | .fun "_" .. => error fn s!"error evaluating\n{fn}\ncannot apply argument to 0-arg lambda"

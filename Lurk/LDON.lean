@@ -18,8 +18,8 @@ inductive LDON
 
 namespace LDON
 
-@[match_pattern] def nil : LDON := sym "NIL"
-@[match_pattern] def t   : LDON := sym "T"
+@[match_pattern] def nil : LDON := sym "nil"
+@[match_pattern] def t   : LDON := sym "t"
 
 def telescopeCons (acc : Array LDON := #[]) : LDON → Array LDON × LDON
   | cons x y => telescopeCons (acc.push x) y
@@ -29,44 +29,50 @@ def consWith (xs : List LDON) (init : LDON) : LDON :=
   xs.foldr (init := init) cons
 
 def reservedSyms : Batteries.RBSet String compare := .ofList [
-  "NIL",
-  "T",
-  "CURRENT-ENV",
-  "BEGIN",
-  "IF",
-  "LAMBDA",
-  "LET",
-  "LETREC",
-  "QUOTE",
-  "ATOM",
-  "CAR",
-  "CDR",
-  "EMIT",
-  "EVAL",
-  "COMMIT",
-  "COMM",
-  "OPEN",
-  "NUM",
-  "CHAR",
-  "CONS",
-  "STRCONS",
-  "+" ,
-  "-" ,
-  "*" ,
-  "/" ,
-  "=" ,
-  "<" ,
-  ">" ,
-  "<=" ,
-  ">=" ,
-  "EQ",
-  "HIDE",
-  "_",
-  "TERMINAL",
-  "DUMMY",
-  "OUTERMOST",
-  "ERROR"
-] _
+  "nil",
+  "t",
+  "&rest",
+  "atom",
+  "apply",
+  "begin",
+  "car",
+  "cdr",
+  "char",
+  "commit",
+  "comm",
+  "bignum",
+  "cons",
+  "current-env",
+  "emit",
+  "empty-env",
+  "eval",
+  "eq",
+  "eqq",
+  "type-eq",
+  "type-eqq",
+  "hide",
+  "if",
+  "lambda",
+  "let",
+  "letrec",
+  "u64",
+  "open",
+  "quote",
+  "secret",
+  "strcons",
+  "list",
+  "+",
+  "-",
+  "*",
+  "/",
+  "%",
+  "=",
+  "<",
+  ">",
+  "<=",
+  ">=",
+  "breakpoint",
+  "fail"] _
 
 open Std Format in
 partial def toFormat (esc : Bool) : LDON → Format
@@ -104,7 +110,7 @@ end Macro
 open Macro in
 /-- This helper is needed for the DSL and for the parser -/
 def mkQuote (x : LDON) : LDON :=
-  ~[sym "QUOTE", x]
+  ~[sym "quote", x]
 
 class ToLDON (α : Type _) where
   toLDON : α → LDON

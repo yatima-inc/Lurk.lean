@@ -21,16 +21,16 @@ inductive Atom
 namespace Atom
 
 def toString : Atom → String
-  | .nil    => "NIL"
-  | .t      => "T"
+  | .nil    => "nil"
+  | .t      => "t"
   | .num  n => ToString.toString n
   | .u64  n => s!"{n}u64"
   | .str  s => s!"\"{s}\""
   | .char c => s!"#\\{c}"
 
 def pprint : Atom → Format
-  | .nil    => "NIL"
-  | .t      => "T"
+  | .nil    => "nil"
+  | .t      => "t"
   | .num  n => n.asHex
   | .u64  n => s!"{n}u64"
   | .str  s => s!"\"{s}\""
@@ -48,16 +48,16 @@ inductive Op₁
   deriving Repr, BEq
 
 def Op₁.toFormat : Op₁ → Format
-| .atom   => "ATOM"
-| .car    => "CAR"
-| .cdr    => "CDR"
-| .emit   => "EMIT"
-| .commit => "COMMIT"
-| .comm   => "COMM"
-| .open   => "OPEN"
-| .num    => "NUM"
-| .u64    => "U64"
-| .char   => "CHAR"
+| .atom   => "atom"
+| .car    => "car"
+| .cdr    => "cdr"
+| .emit   => "emit"
+| .commit => "commit"
+| .comm   => "comm"
+| .open   => "open"
+| .num    => "num"
+| .u64    => "u64"
+| .char   => "char"
 
 def Op₁.toString := ToString.toString ∘ Op₁.toFormat
 
@@ -70,8 +70,8 @@ inductive Op₂
   deriving Repr, BEq
 
 def Op₂.toFormat : Op₂ → Format
-  | .cons    => "CONS"
-  | .strcons => "STRCONS"
+  | .cons    => "cons"
+  | .strcons => "strcons"
   | .add     => "+"
   | .sub     => "-"
   | .mul     => "*"
@@ -82,8 +82,8 @@ def Op₂.toFormat : Op₂ → Format
   | .gt      => ">"
   | .le      => "<="
   | .ge      => ">="
-  | .eq      => "EQ"
-  | .hide    => "HIDE"
+  | .eq      => "eq"
+  | .hide    => "hide"
 
 def Op₂.toString := ToString.toString ∘ Op₂.toFormat
 
@@ -169,15 +169,15 @@ partial def toFormat (esc := false) (e : Expr) : Format :=
   match e with
   | .atom l => format l
   | .sym s => formatSym s
-  | .env => .text "CURRENT-ENV"
+  | .env => .text "current-env"
   | .op₁ op e =>
     paren $ format op ++ " " ++ e.toFormat esc
   | .op₂ op e₁ e₂ =>
     paren $ format op ++ " " ++ e₁.toFormat esc ++ line ++ e₂.toFormat esc
   | .begin e₁ e₂ =>
-    paren $ "BEGIN" ++ line ++ e₁.toFormat esc ++ line ++ e₂.toFormat esc
+    paren $ "begin" ++ line ++ e₁.toFormat esc ++ line ++ e₂.toFormat esc
   | .if cond e₁ e₂ =>
-    paren $ "IF " ++ cond.toFormat esc ++ indentD (e₁.toFormat esc ++ line ++ e₂.toFormat esc)
+    paren $ "if " ++ cond.toFormat esc ++ indentD (e₁.toFormat esc ++ line ++ e₂.toFormat esc)
   | .app₀ fn => paren $ fn.toFormat esc
   | .app f a =>
     let as := f.telescopeApp [a] |>.map $ toFormat esc
@@ -185,19 +185,19 @@ partial def toFormat (esc := false) (e : Expr) : Format :=
   | .lambda s b =>
     let (as, b) := b.telescopeLam #[s]
     let as := as.data.map formatSym
-    paren $ "LAMBDA " ++ nest 2 (paren (joinSep as " ")) ++ indentD (b.toFormat esc)
+    paren $ "lambda " ++ nest 2 (paren (joinSep as " ")) ++ indentD (b.toFormat esc)
   | .let s v b =>
     let (bs, b) := b.telescopeLet #[(s, v)]
     let bs := bs.data.map fun (n, e) => paren $ formatSym n ++ indentD (e.toFormat esc)
-    paren $ "LET " ++ nest 4 (paren $ joinSep bs line) ++ indentD (b.toFormat esc)
+    paren $ "let " ++ nest 4 (paren $ joinSep bs line) ++ indentD (b.toFormat esc)
   | .letrec s v b =>
     let (bs, b) := b.telescopeLetrec #[(s, v)]
     let bs := bs.data.map fun (n, e) => paren $ formatSym n ++ indentD (e.toFormat esc)
-    paren $ "LETREC " ++ nest 7 (paren $ joinSep bs line) ++ indentD (b.toFormat esc)
-  | .quote ldon => paren $ "QUOTE" ++ line ++ ldon.toFormat esc
+    paren $ "letrec " ++ nest 7 (paren $ joinSep bs line) ++ indentD (b.toFormat esc)
+  | .quote ldon => paren $ "quote " ++ line ++ ldon.toFormat esc
   | .eval e env? =>
     let env? := if env? == .nil then .nil else line ++ env?.toFormat esc
-    paren $ "EVAL" ++ line ++ e.toFormat esc ++ env?
+    paren $ "eval " ++ line ++ e.toFormat esc ++ env?
 where
   formatSym s := if esc then s!"|{s}|" else s
 

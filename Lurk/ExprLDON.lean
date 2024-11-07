@@ -18,61 +18,61 @@ open LDON Macro
 partial def toLDON : Expr → LDON
   | .atom a => a.toLDON
   | .sym s => .sym s
-  | .env => ~[.sym "CURRENT-ENV"]
+  | .env => ~[.sym "current-env"]
   | .op₁ o e => ~[.sym o.toString, e.toLDON]
   | .op₂ o e₁ e₂ => ~[.sym o.toString, e₁.toLDON, e₂.toLDON]
   | e@(.begin ..) =>
     let (es, e) := e.telescopeBegin
-    .cons (.sym "BEGIN") $ es.foldr (.cons ·.toLDON ·) e.toLDON
-  | .if a b c => .cons (.sym "IF") $ .cons a.toLDON $ .cons b.toLDON $ .cons c.toLDON .nil
+    .cons (.sym "begin") $ es.foldr (.cons ·.toLDON ·) e.toLDON
+  | .if a b c => .cons (.sym "if") $ .cons a.toLDON $ .cons b.toLDON $ .cons c.toLDON .nil
   | .app₀ e => ~[e.toLDON]
   | .app f a => ~[f.toLDON, a.toLDON]
   | .lambda s e =>
     let (ss, b) := e.telescopeLam #[s]
-    .cons (.sym "LAMBDA") $
+    .cons (.sym "lambda") $
       .cons (ss.foldr (fun s acc => .cons (.sym s) acc) .nil) $ .cons b.toLDON .nil
   | .let s v b =>
     let (bs, b) := b.telescopeLet #[(s, v)]
-    .cons (.sym "LET") $
+    .cons (.sym "let") $
       .cons (bs.foldr (fun (s, v) acc =>
           .cons (.cons (.sym s) (.cons v.toLDON .nil)) acc) .nil) $
         .cons b.toLDON .nil
   | .letrec s v b =>
     let (bs, b) := b.telescopeLetrec #[(s, v)]
-    .cons (.sym "LETREC") $
+    .cons (.sym "letrec") $
       .cons (bs.foldr (fun (s, v) acc =>
           .cons (.cons (.sym s) (.cons v.toLDON .nil)) acc) .nil) $
         .cons b.toLDON .nil
-  | .quote d => ~[.sym "QUOTE", d]
+  | .quote d => ~[.sym "quote", d]
   | .eval e env? =>
     if env? == .nil then
-      ~[.sym "EVAL", e.toLDON]
+      ~[.sym "eval", e.toLDON]
     else
-      ~[.sym "EVAL", e.toLDON, env?.toLDON]
+      ~[.sym "eval", e.toLDON, env?.toLDON]
 
 def symOfString : String → Expr
-  | "NIL" => .nil
-  | "T"   => .t
+  | "nil" => .nil
+  | "t"   => .t
   | x     => .sym x
 
 end Expr
 
 def mkOp₁ (op₁ : String) : Expr → Expr := match op₁ with
-  | "ATOM"   => .op₁ .atom
-  | "CAR"    => .op₁ .car
-  | "CDR"    => .op₁ .cdr
-  | "EMIT"   => .op₁ .emit
-  | "COMMIT" => .op₁ .commit
-  | "COMM"   => .op₁ .comm
-  | "OPEN"   => .op₁ .open
-  | "NUM"    => .op₁ .num
-  | "U64"    => .op₁ .u64
-  | "CHAR"   => .op₁ .char
+  | "atom"   => .op₁ .atom
+  | "car"    => .op₁ .car
+  | "cdr"    => .op₁ .cdr
+  | "emit"   => .op₁ .emit
+  | "commit" => .op₁ .commit
+  | "comm"   => .op₁ .comm
+  | "open"   => .op₁ .open
+  | "num"    => .op₁ .num
+  | "u64"    => .op₁ .u64
+  | "char"   => .op₁ .char
   | x => fun y => .app (.symOfString x) y
 
 def mkOp₂ (op₂ : String) : Expr → Expr → Expr := match op₂ with
-  | "CONS"    => .op₂ .cons
-  | "STRCONS" => .op₂ .strcons
+  | "cons"    => .op₂ .cons
+  | "strcons" => .op₂ .strcons
   | "+"       => .op₂ .add
   | "-"       => .op₂ .sub
   | "*"       => .op₂ .mul
@@ -82,8 +82,8 @@ def mkOp₂ (op₂ : String) : Expr → Expr → Expr := match op₂ with
   | ">"       => .op₂ .gt
   | "<="      => .op₂ .le
   | ">="      => .op₂ .ge
-  | "EQ"      => .op₂ .eq
-  | "HIDE"    => .op₂ .hide
+  | "eq"      => .op₂ .eq
+  | "hide"    => .op₂ .hide
   | x => fun y z => .app (.app (.symOfString x) y) z
 
 namespace LDON
@@ -106,41 +106,41 @@ partial def toExpr : LDON → Except String Expr
   | .u64  n  => return .atom $ .u64 n
   | .char c  => return .atom $ .char c
   | .str  s  => return .atom $ .str s
-  | ~[.sym "CURRENT-ENV"] => return .env
+  | ~[.sym "current-env"] => return .env
   | .sym s  => return .symOfString s
   -- `begin` is a sequence of expressions
-  | .cons (.sym "BEGIN") tail => match tail.telescopeCons with
+  | .cons (.sym "begin") tail => match tail.telescopeCons with
     | (xs, .nil) =>
       xs.foldrM (init := .nil) fun x acc => do
         pure $ .begin (← x.toExpr) acc
     | x => throw s!"expected a list terminating with `nil` but got {x}"
   -- `if` is a sequence of (up to) three expressions
-  | ~[.sym "IF"] => return .if .nil .nil .nil
-  | ~[.sym "IF", x] => return .if (← x.toExpr) .nil .nil
-  | ~[.sym "IF", x, y] => return .if (← x.toExpr) (← y.toExpr) .nil
-  | ~[.sym "IF", x, y, z] => return .if (← x.toExpr) (← y.toExpr) (← z.toExpr)
+  | ~[.sym "if"] => return .if .nil .nil .nil
+  | ~[.sym "if", x] => return .if (← x.toExpr) .nil .nil
+  | ~[.sym "if", x, y] => return .if (← x.toExpr) (← y.toExpr) .nil
+  | ~[.sym "if", x, y, z] => return .if (← x.toExpr) (← y.toExpr) (← z.toExpr)
   -- `lambda` requires a gradual consumption of a symbol
-  | ~[.sym "LAMBDA", args, body] => do
+  | ~[.sym "lambda", args, body] => do
     let args ← args.asArgs
     if args.isEmpty then
       return .lambda "_" (← body.toExpr)
     else
       return args.foldr (init := ← body.toExpr) fun arg acc => .lambda arg acc
   -- let and letrec are in the same case
-  | ~[.sym "LET", bindings, body] => do
+  | ~[.sym "let", bindings, body] => do
     let bindings ← bindings.asBindings
     let bindings ← bindings.mapM fun (x, y) => return (x, ← y.toExpr)
     return bindings.foldr (init := ← body.toExpr)
       fun (n, e) acc => .let n e acc
-  | ~[.sym "LETREC", bindings, body] => do
+  | ~[.sym "letrec", bindings, body] => do
     let bindings ← bindings.asBindings
     let bindings ← bindings.mapM fun (x, y) => return (x, ← y.toExpr)
     return bindings.foldr (init := ← body.toExpr)
       fun (n, e) acc => .letrec n e acc
   -- quoting consumes the expression as-is
-  | ~[.sym "QUOTE", x] => return .quote x
-  | ~[.sym "EVAL", x] => return .eval (← x.toExpr) .nil
-  | ~[.sym "EVAL", x, y] => return .eval (← x.toExpr) (← y.toExpr)
+  | ~[.sym "quote", x] => return .quote x
+  | ~[.sym "eval", x] => return .eval (← x.toExpr) .nil
+  | ~[.sym "eval", x, y] => return .eval (← x.toExpr) (← y.toExpr)
   -- binary operators
   | ~[.sym op₂, x, y] => return mkOp₂ op₂ (← x.toExpr) (← y.toExpr)
   -- unary operators

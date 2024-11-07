@@ -15,8 +15,6 @@ private def between {α : Type} (init final : Char) (p : Parser α) : Parser α 
   skipChar final
   return d
 
-#eval (between '(' ')' (pchar 'a')).run "(a)"
-
 def nonHexNumP : Parser LDON := do
   let d ← digits
   return .num <| .ofNat d

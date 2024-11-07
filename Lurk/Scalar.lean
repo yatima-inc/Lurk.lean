@@ -144,6 +144,7 @@ def hashLDON (x : LDON) : HashM ScalarPtr := do
     let ptr ← match x with
       | .nil => addExprHash ⟨.nil, (← hashStrings ["nil", "lurk"]).val⟩ .nil
       | .num n => pure ⟨.num, .ofSmallNat n.val⟩
+      | .comm d => pure ⟨.comm, d⟩
       | .u64 n => pure ⟨.u64, .ofUInt64 n⟩
       | .char n => pure ⟨.char, .ofChar n⟩
       | .str s => hashChars s.data

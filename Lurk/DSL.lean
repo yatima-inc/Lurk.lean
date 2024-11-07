@@ -247,6 +247,7 @@ declare_syntax_cat                                   expr
 scoped syntax atom_                                : expr
 scoped syntax ident                                : expr
 scoped syntax num                                  : expr
+scoped syntax "#c" noWs num                             : expr -- Commitments
 scoped syntax char                                 : expr
 scoped syntax str                                  : expr
 scoped syntax "(" "current-env" ")"                : expr
@@ -281,6 +282,9 @@ partial def elabExpr : TSyntax `expr → TermElabM Lean.Expr
   | `(expr| $s:ident) => do mkAppM ``Expr.sym #[mkStrLit s.getId.toString]
   | `(expr| $n:num) => do
     let atom ← mkAppM ``Atom.num #[← mkAppM ``F.ofNat #[mkNatLit n.getNat]]
+    mkAppM ``Expr.atom #[atom]
+  | `(expr | #c$n:num) => do
+    let atom ← mkAppM ``Atom.commit #[← mkAppM ``Digest.fromComm #[mkNatLit n.getNat]]
     mkAppM ``Expr.atom #[atom]
   | `(expr| $c:char) => do
     let atom ← mkAppM ``Atom.char #[← mkAppM ``Char.ofNat #[mkNatLit c.getChar.val.toNat]]

@@ -11,6 +11,7 @@ inductive Atom
   | t | nil
   -- Numerical values
   | num : F → Atom
+  | commit : Digest → Atom
   | u64 : UInt64 → Atom
   -- Strings
   | str : String → Atom
@@ -24,6 +25,7 @@ def toString : Atom → String
   | .nil    => "nil"
   | .t      => "t"
   | .num  n => ToString.toString n
+  | .commit d => s!"#c{d.asHex}"
   | .u64  n => s!"{n}u64"
   | .str  s => s!"\"{s}\""
   | .char c => s!"#\\{c}"
@@ -32,6 +34,7 @@ def pprint : Atom → Format
   | .nil    => "nil"
   | .t      => "t"
   | .num  n => n.asHex
+  | .commit d => s!"#c{d.asHex}"
   | .u64  n => s!"{n}u64"
   | .str  s => s!"\"{s}\""
   | .char c => s!"#\\{c}"

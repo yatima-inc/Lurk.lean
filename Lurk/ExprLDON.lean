@@ -8,6 +8,7 @@ def Atom.toLDON : Atom → LDON
   | .t   => .t
   | .num x => .num x
   | .u64 x => .u64 x
+  | .commit x => .comm x
   | .str x => .str x
   | .char x => .char x
 
@@ -103,6 +104,7 @@ def asBindings : LDON → Except String (List (String × LDON))
 partial def toExpr : LDON → Except String Expr
   -- trivial cases
   | .num  n  => return .atom $ .num (.ofNat n)
+  | .comm d => return .atom $ .commit d
   | .u64  n  => return .atom $ .u64 n
   | .char c  => return .atom $ .char c
   | .str  s  => return .atom $ .str s

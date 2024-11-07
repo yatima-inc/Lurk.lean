@@ -91,4 +91,9 @@ def Digest.ofUInt64 (u : UInt64) : Digest :=
   let byte8 := (u >>> 56) &&& 0b11111111
   #[.ofNat byte1.toNat, .ofNat byte2.toNat, .ofNat byte3.toNat, .ofNat byte4.toNat, .ofNat byte5.toNat, .ofNat byte6.toNat, .ofNat byte7.toNat, .ofNat byte8.toNat]
 
+def Digest.fromComm (n : Nat) : Digest :=
+  let bytes := n.toByteArrayLE
+  let digest := bytes.data.map fun b => F.ofNat b.toNat
+  digest ++ Array.mkArray (8 - digest.size) .zero
+
 end Lurk

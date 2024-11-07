@@ -99,6 +99,7 @@ partial def telescopeCons (acc : Array Value := #[]) : Value → Array Value × 
 
 def ofLDON : LDON → Value
   | .num  x => .num  x
+  | .comm x => .comm x
   | .u64  x => .u64  x
   | .char x => .char x
   | .str  x => .str  x
@@ -109,6 +110,7 @@ def ofAtom : Atom → Value
   | .t      => .t
   | .nil    => .nil
   | .num  x => .num  x
+  | .commit x => .comm x
   | .u64  x => .u64  x
   | .char x => .char x
   | .str  x => .str  x

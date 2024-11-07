@@ -9,6 +9,7 @@ of LDON.
 -/
 inductive LDON
   | num : F → LDON
+  | comm : Digest → LDON
   | u64 : UInt64 → LDON
   | char : Char → LDON
   | str : String → LDON
@@ -77,6 +78,7 @@ def reservedSyms : Batteries.RBSet String compare := .ofList [
 open Std Format in
 partial def toFormat (esc : Bool) : LDON → Format
   | num n => format n
+  | comm d => s!"#c{d.asHex}"
   | u64 n => format n
   | char c => s!"#\\{c}"
   | str s => s!"\"{s}\""
